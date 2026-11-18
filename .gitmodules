@@ -1,0 +1,3 @@
+[submodule "keila"]
+	path = keila
+	url = https://github.com/pentacent/keila

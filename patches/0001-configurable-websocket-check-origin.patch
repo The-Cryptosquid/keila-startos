@@ -1,0 +1,22 @@
+diff --git i/config/runtime.exs w/config/runtime.exs
+index 126dc46..a098739 100644
+--- i/config/runtime.exs
++++ w/config/runtime.exs
+@@ -378,6 +378,17 @@ if config_env() == :prod do
+     """)
+   end
+ 
++  # Allowed WebSocket origins
++  # Comma-separated list in Phoenix check_origin format, e.g. "//example.com,//keila.local".
++  # Unset keeps the Phoenix default: only the URL_HOST origin is accepted.
++  check_origin = System.get_env("CHECK_ORIGIN")
++
++  if check_origin not in [nil, ""] do
++    config(:keila, KeilaWeb.Endpoint,
++      check_origin: check_origin |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
++    )
++  end
++
+   # Application Port
+   port = System.get_env("PORT") |> maybe_to_int.()
+ 
