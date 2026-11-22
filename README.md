@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon.svg" alt="Keila Logo" width="21%">
+  <img src=".github/social-preview.png" alt="Keila on StartOS" width="100%">
 </p>
 
 # Keila on StartOS
