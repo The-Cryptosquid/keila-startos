@@ -11,6 +11,13 @@
 
 [Keila](https://github.com/pentacent/keila) is an open-source newsletter tool: contacts, segments, signup forms, and campaigns sent through SMTP, Amazon SES, Mailgun, Postmark or Sendgrid. This package runs it with a bundled PostgreSQL, manages the admin credential and system mailer from StartOS, and adds contact import and export through NextExplorer, FileBrowser Quantum or Nextcloud.
 
+Upstream also sells a hosted service, Keila Cloud, with no free plan and plans priced by monthly email volume. The self-hosted instance differs from it in four ways:
+
+- **No plan caps the number of emails.** Sending is limited only by the mail provider configured in Keila and that provider's own pricing. Keila Cloud also accepts your own mail server, but every plan still has a monthly email allowance.
+- **Subscriber data stays on the server.** Contacts, segments, signup forms and campaigns live in the bundled PostgreSQL on this server, not with a third party.
+- **The newsletter is backed up with the server.** The database, settings and campaign images are included in StartOS backups and restore with nothing to redo.
+- **Contact lists move through the server's own file services.** Import and export read and write CSV files in NextExplorer, FileBrowser Quantum or Nextcloud on the same server.
+
 ---
 
 ## Table of Contents
