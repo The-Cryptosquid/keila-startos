@@ -2,6 +2,7 @@ import { manifest as filebrowserManifest } from 'filebrowser-quantum-startos/sta
 import { manifest as nextcloudManifest } from 'nextcloud-startos/startos/manifest'
 import { manifest as nextexplorerManifest } from 'nextexplorer-startos/startos/manifest'
 import { T } from '@start9labs/start-sdk'
+import { createHash } from 'crypto'
 import { FileService, Store } from './fileModels/store.json'
 import { i18n } from './i18n'
 import { sdk } from './sdk'
@@ -46,10 +47,24 @@ export const baseEnv = (store: Store): Record<string, string> => {
     DB_URL: `postgres://${postgresUser}:${store.postgresPassword}@127.0.0.1:${postgresPort}/${postgresDb}`,
     SECRET_KEY_BASE: store.secretKeyBase,
     USER_CONTENT_DIR: uploadsPath,
+    HASHID_SALT: hashidSalt(store.secretKeyBase),
     DISABLE_UPDATE_CHECKS: 'true',
     ...placeholderMailer(store.adminEmail),
   }
 }
+
+/**
+ * Exactly the salt Keila derives when HASHID_SALT is unset
+ * (`:crypto.hash(:sha256, SECRET_KEY_BASE <> "hashid_salt") |> Base.url_encode64()`,
+ * padded), set explicitly only to silence its startup warning. Any other value
+ * would change every project and form id, breaking embedded forms.
+ */
+export const hashidSalt = (secretKeyBase: string) =>
+  createHash('sha256')
+    .update(secretKeyBase + 'hashid_salt')
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
 
 /** A mailer that accepts the config and delivers nothing (nothing listens on port 25). */
 export const placeholderMailer = (from: string): Record<string, string> => ({

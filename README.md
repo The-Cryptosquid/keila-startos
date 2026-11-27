@@ -89,6 +89,7 @@ Environment the package sets on Keila, re-asserted on every start (a change take
 | `KEILA_USER`, `KEILA_PASSWORD`                               | `adminEmail`, `adminPassword`. Keila reads these only on the start that finds the database empty                                                                                                              |
 | `DISABLE_REGISTRATION`                                       | inverse of `registrationEnabled`                                                                                                                                                                              |
 | `CAPTCHA_PROVIDER`, `CAPTCHA_SITE_KEY`, `CAPTCHA_SECRET_KEY` | only when keys are saved; otherwise Keila falls back to hCaptcha's public test keys                                                                                                                           |
+| `HASHID_SALT`                                                | derived from `SECRET_KEY_BASE` exactly as Keila derives it when unset, so project and form ids are unchanged; set only to silence Keila's startup warning                                                     |
 | `USER_CONTENT_DIR`                                           | `/opt/app/uploads`                                                                                                                                                                                            |
 | `DISABLE_UPDATE_CHECKS`                                      | `true` — StartOS delivers updates                                                                                                                                                                             |
 
@@ -177,6 +178,7 @@ The database is dumped, not copied; `startos` and `uploads` are copied as files.
 3. System email cannot be fully disabled in Keila; "Disabled" sets a placeholder mailer, so emails Keila tries to send for accounts fail (logged), while the service runs normally.
 4. Without captcha keys, Keila uses hCaptcha's public test keys, which load hCaptcha's script but block nothing.
 5. The file-service integration exchanges contact CSV files only. Campaign images stay on the `uploads` volume and are served by Keila.
+6. Uploads are served from the same address as the admin UI. Keila suggests a separate domain for them (`USER_CONTENT_BASE_URL`) and logs a warning at every start because none is set; the package does not set one, because a StartOS interface has a single address set and Keila accepts only JPEG, PNG, GIF and WebP uploads, which cannot carry scripts.
 
 ---
 
@@ -213,6 +215,7 @@ startos_managed_env_vars:
   - CAPTCHA_PROVIDER
   - CAPTCHA_SITE_KEY
   - CAPTCHA_SECRET_KEY
+  - HASHID_SALT
   - USER_CONTENT_DIR
   - DISABLE_UPDATE_CHECKS
 dependencies:
