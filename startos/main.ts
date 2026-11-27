@@ -6,6 +6,7 @@ import { sdk } from './sdk'
 import {
   bareEmail,
   baseEnv,
+  checkFileStorage,
   evalScript,
   keilaMounts,
   postgresDb,
@@ -228,6 +229,21 @@ export const main = sdk.setupMain(async ({ effects }) => {
                   'Keila cannot send account or password-reset emails. Use the Configure System Email action to enable them. Campaigns are unaffected; they use the senders you set up in each project.',
                 ),
               },
+      },
+      requires: ['keila'],
+    })
+    .addHealthCheck('file-storage', {
+      ready: {
+        display: i18n('File Storage'),
+        // Each run mounts the file service's volume, so check once at start
+        // and then every five minutes, not every second while failing.
+        trigger: async function* () {
+          while (true) {
+            yield
+            await new Promise((r) => setTimeout(r, 300_000))
+          }
+        },
+        fn: () => checkFileStorage(effects, store),
       },
       requires: ['keila'],
     })

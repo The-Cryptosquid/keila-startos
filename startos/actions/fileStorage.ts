@@ -1,7 +1,7 @@
 import { storeJson } from '../fileModels/store.json'
 import { i18n } from '../i18n'
 import { sdk } from '../sdk'
-import { filesFolder } from '../utils'
+import { filesFolder, folderLocation, withFileStorage } from '../utils'
 
 const { InputSpec, Value, Variants } = sdk
 
@@ -89,5 +89,31 @@ export const fileStorage = sdk.Action.withInput(
             : null,
       },
     })
+
+    // Create the folder now (or repair its owner) so the File Storage health
+    // check and the first import see it. A service that is not installed yet
+    // is left to StartOS's dependency prompt; run this action again after.
+    const store = await storeJson.read().once()
+    if (
+      !store ||
+      selection === 'none' ||
+      !(await sdk.getInstalledPackages(effects)).includes(selection)
+    ) {
+      return null
+    }
+    await withFileStorage(
+      effects,
+      store,
+      'file-storage-setup',
+      async () => null,
+    )
+    return {
+      version: '1',
+      title: i18n('File Storage Ready'),
+      message: i18n('Imports and exports use ${location}', {
+        location: folderLocation(store),
+      }),
+      result: null,
+    }
   },
 )

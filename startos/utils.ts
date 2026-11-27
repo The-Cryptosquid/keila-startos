@@ -214,6 +214,153 @@ export async function withFileStorage<R>(
   )
 }
 
+/** Run `fn` with `subpath` of a file service's volume mounted read-only; `null` if it does not exist. */
+async function peekFolder<R>(
+  effects: T.Effects,
+  service: Exclude<FileService, 'none'>,
+  subpath: string,
+  fn: (
+    sub: Parameters<Parameters<typeof sdk.SubContainer.withTemp>[4]>[0],
+  ) => Promise<R>,
+): Promise<R | null> {
+  // A read-only mount of a missing subpath fails instead of creating it, so
+  // looking never leaves a folder behind.
+  const mounts =
+    service === 'nextexplorer'
+      ? sdk.Mounts.of().mountDependency<typeof nextexplorerManifest>({
+          dependencyId: 'nextexplorer',
+          volumeId: 'data',
+          subpath,
+          mountpoint: filesMount,
+          readonly: true,
+        })
+      : service === 'filebrowser'
+        ? sdk.Mounts.of().mountDependency<typeof filebrowserManifest>({
+            dependencyId: 'filebrowser',
+            volumeId: 'data',
+            subpath,
+            mountpoint: filesMount,
+            readonly: true,
+          })
+        : sdk.Mounts.of().mountDependency<typeof nextcloudManifest>({
+            dependencyId: 'nextcloud',
+            volumeId: 'nextcloud',
+            subpath,
+            mountpoint: filesMount,
+            readonly: true,
+          })
+  let mounted = false
+  try {
+    return await sdk.SubContainer.withTemp(
+      effects,
+      { imageId: 'keila' },
+      mounts,
+      'file-storage-check',
+      async (sub) => {
+        mounted = true
+        return fn(sub)
+      },
+    )
+  } catch (e) {
+    if (!mounted) return null
+    throw e
+  }
+}
+
+/**
+ * The File Storage health check: the chosen service is installed and its
+ * Keila folder exists, is a folder, and is owned by the user that service
+ * runs as. Read-only; it never creates or changes anything.
+ */
+export async function checkFileStorage(
+  effects: T.Effects,
+  store: Store,
+): Promise<T.NamedHealthCheckResultKindInput> {
+  const { service, nextcloudUser } = store.fileStorage
+  if (service === 'none') {
+    return {
+      result: 'disabled',
+      message: i18n(
+        'No file service is chosen, so Import Contacts and Export Contacts cannot run. Choose one with the File Storage action.',
+      ),
+    }
+  }
+  const name = fileServiceNames[service]
+  if (!(await sdk.getInstalledPackages(effects)).includes(service)) {
+    return {
+      result: 'failure',
+      message: i18n(
+        '${service} is not installed. Install it, or choose another service with the File Storage action.',
+        { service: name },
+      ),
+    }
+  }
+  if (service === 'nextcloud' && !nextcloudUser) {
+    return {
+      result: 'failure',
+      message: i18n(
+        'Run the File Storage action and enter your Nextcloud username.',
+      ),
+    }
+  }
+
+  const userFiles = `data/${nextcloudUser}/files`
+  const subpath =
+    service === 'nextcloud' ? `${userFiles}/${filesFolder}` : filesFolder
+  const location = folderLocation(store)
+  const found = await peekFolder(effects, service, subpath, async (sub) => {
+    const { exitCode, stdout } = await sub.exec(
+      ['sh', '-c', `test -d ${filesMount} && stat -c %u ${filesMount}`],
+      { user: 'root' },
+    )
+    return exitCode === 0 ? Number(stdout.toString().trim()) : NaN
+  })
+
+  if (found === null) {
+    if (
+      service === 'nextcloud' &&
+      (await peekFolder(effects, service, userFiles, async () => true)) === null
+    ) {
+      return {
+        result: 'failure',
+        message: i18n(
+          'Nextcloud has no files for a user named ${user}. Check the username in the File Storage action; it is the login name, not the display name.',
+          { user: nextcloudUser ?? '' },
+        ),
+      }
+    }
+    return {
+      result: 'failure',
+      message: i18n(
+        'Keila cannot find ${location}. Run the File Storage action again to create it.',
+        { location, folder: filesFolder, service: name },
+      ),
+    }
+  }
+  if (Number.isNaN(found)) {
+    return {
+      result: 'failure',
+      message: i18n(
+        'Keila expected ${location} but found a file with that name. Rename or remove it in ${service}, then run the File Storage action again.',
+        { location, folder: filesFolder, service: name },
+      ),
+    }
+  }
+  if (found !== owners[service]) {
+    return {
+      result: 'failure',
+      message: i18n(
+        'Keila can reach ${location}, but it has the wrong owner, so ${service} may not be able to change the files Keila writes there. Run the File Storage action again to repair it.',
+        { location, folder: filesFolder, service: name },
+      ),
+    }
+  }
+  return {
+    result: 'success',
+    message: i18n('Imports and exports use ${location}', { location }),
+  }
+}
+
 export type ScriptResult =
   | { ok: true; project: string; count: number; total?: number }
   | { ok: false; error: string }

@@ -96,12 +96,12 @@ Because `KEILA_PASSWORD` is read only on the first start, a password rotated lat
 
 ## Dependencies
 
-All three dependencies are optional, and at most one is active: the one chosen in **File Storage**. Each is declared `exists` — Keila never talks to the running service, it mounts its volume only inside the import and export actions' temporary container.
+All three dependencies are optional, and at most one is active: the one chosen in **File Storage**. Each is declared `exists` — Keila never talks to the running service. It mounts the `Keila` folder read-write only inside the temporary container of the File Storage, Import Contacts and Export Contacts actions, and read-only for the File Storage health check.
 
 | Dependency          | When required                        | What is mounted (read-write, at `/mnt/files`)                                                                                                                                                                                         |
 | ------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | NextExplorer        | `fileStorage.service = nextexplorer` | `data` volume, subpath `Keila`. Keila first runs NextExplorer's `add-location` action (dependent access) with the name `Keila`, which creates `/mnt/Keila` owned by uid 1000, or succeeds if it already exists                        |
-| FileBrowser Quantum | `fileStorage.service = filebrowser`  | `data` volume, subpath `Keila` (created on first use, chowned to uid 1000)                                                                                                                                                            |
+| FileBrowser Quantum | `fileStorage.service = filebrowser`  | `data` volume, subpath `Keila` (created by File Storage or the first import/export, chowned to uid 1000)                                                                                                                              |
 | Nextcloud           | `fileStorage.service = nextcloud`    | `nextcloud` volume, subpath `data/<user>/files/Keila`. The user's `data/<user>/files` is checked with a read-only mount first, so a wrong username fails instead of creating a stray folder. Files are chowned to uid 33 (`www-data`) |
 
 Exported files are chowned to the owning uid shown above and mode 644. Nothing outside the `Keila` folder is mounted.
@@ -135,7 +135,7 @@ Actions that change settings write `store.json`, which restarts Keila if it is r
 - **Configure System Email** (`manage-smtp`) — Keila's own emails only (password reset, account activation). Campaign delivery uses senders configured inside Keila per project and is unaffected. A `Name <addr>` from-address is reduced to the bare address Keila requires.
 - **Enable/Disable Public Signups** (`toggle-registration`) — flips `DISABLE_REGISTRATION`. The admin can create accounts at `/admin/users` without it.
 - **Configure Captcha** (`captcha`) — sets or clears captcha keys.
-- **File Storage** (`file-storage`) — chooses the dependency above; changes which optional dependency is active. No files are touched until an import or export runs.
+- **File Storage** (`file-storage`) — chooses the dependency above; changes which optional dependency is active. If the chosen service is installed, it then creates the `Keila` folder (for NextExplorer, through its `add-location` action) and sets its owner, the same preparation an import or export does; otherwise it only saves the choice, and running it again after installing creates the folder. Output: where the folder is.
 - **Import Contacts** (`import-contacts`) — requires the service running (it uses the live database). Runs `Keila.Contacts.import_csv` in a temporary container on `<Keila folder>/<file>`, in one transaction: a bad row (for example a missing email) imports nothing and returns Keila's error message with the line number. `replace` updates existing contacts' names; `ignore` leaves them. Re-running with `ignore` is a no-op. Takes seconds for thousands of rows. Output: new-contact count and project total.
 - **Export Contacts** (`export-contacts`) — requires the service running. Writes `contacts-<project-slug>-<UTC timestamp>.csv` with the columns of Keila's own export (Email, First name, Last name, Data, Status, External ID); never overwrites. Nextcloud does not list a file written this way until its **Scan Files** action runs; NextExplorer and FileBrowser Quantum show it immediately.
 
@@ -152,14 +152,15 @@ Two tasks, both critical, both on Keila's own page.
 
 ## Health Checks
 
-Two checks follow the daemons' readiness; two more report configuration that affects subscribers.
+Two checks follow the daemons' readiness; three more report configuration.
 
-| Check          | Probes                                                         | Failure means                                                                                                                                                                   |
-| -------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Database       | `pg_isready` on 127.0.0.1                                      | PostgreSQL is starting or crashed; check `postgres-sub` logs                                                                                                                    |
-| Web Interface  | `GET /auth/login` on port 4000 (3-minute grace period)         | During first start: migrations still running. Later: Keila crash-looping — the log usually names a missing or invalid `MAILER_SMTP_*`, database, or `SECRET_KEY_BASE` setting   |
-| Public Address | whether the chosen address is a public domain of the interface | Failure is a configuration warning, not a fault: emails are going out with links subscribers cannot open. Fix by adding a public domain and choosing it with Set Public Address |
-| System Email   | whether a mailer is configured                                 | Reports `disabled` when no SMTP is set; password resets and account emails fail. Campaigns are unaffected                                                                       |
+| Check          | Probes                                                                                                                                                                  | Failure means                                                                                                                                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Database       | `pg_isready` on 127.0.0.1                                                                                                                                               | PostgreSQL is starting or crashed; check `postgres-sub` logs                                                                                                                                                                                           |
+| Web Interface  | `GET /auth/login` on port 4000 (3-minute grace period)                                                                                                                  | During first start: migrations still running. Later: Keila crash-looping — the log usually names a missing or invalid `MAILER_SMTP_*`, database, or `SECRET_KEY_BASE` setting                                                                          |
+| Public Address | whether the chosen address is a public domain of the interface                                                                                                          | Failure is a configuration warning, not a fault: emails are going out with links subscribers cannot open. Fix by adding a public domain and choosing it with Set Public Address                                                                        |
+| System Email   | whether a mailer is configured                                                                                                                                          | Reports `disabled` when no SMTP is set; password resets and account emails fail. Campaigns are unaffected                                                                                                                                              |
+| File Storage   | at start and every 5 minutes: the chosen service is installed, and a read-only mount of its `Keila` folder succeeds, is a directory, and is owned by that service's uid | Reports `disabled` when no service is chosen. Failure names the cause: service not installed, Nextcloud username wrong, folder missing (removed in the file service), a file in its place, or wrong owner. Rerunning File Storage fixes the last three |
 
 ## Backups and Restore
 
@@ -235,4 +236,5 @@ health_checks:
   - keila
   - public-address
   - system-email
+  - file-storage
 ```

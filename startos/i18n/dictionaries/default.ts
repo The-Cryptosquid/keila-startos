@@ -100,6 +100,13 @@ const dict = {
   'Run the File Storage action and enter your Nextcloud username.': 82,
   'Nextcloud has no files for a user named ${user}. Check the username in the File Storage action; it is the login name, not the display name.': 83,
   'Keila did not report a result. Check the service logs.': 84,
+  // utils.ts — File Storage health check
+  'No file service is chosen, so Import Contacts and Export Contacts cannot run. Choose one with the File Storage action.': 85,
+  'Keila cannot find ${location}. Run the File Storage action again to create it.': 86,
+  'Keila expected ${location} but found a file with that name. Rename or remove it in ${service}, then run the File Storage action again.': 87,
+  'Keila can reach ${location}, but it has the wrong owner, so ${service} may not be able to change the files Keila writes there. Run the File Storage action again to repair it.': 88,
+  'Imports and exports use ${location}': 89,
+  'File Storage Ready': 90,
 } as const
 
 /**
